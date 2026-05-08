@@ -1,0 +1,305 @@
+# `ss` — Usage Demo
+
+A practical tour of the **Stock Screener** CLI: every command, every flag, every realistic workflow.
+
+> **Disclaimer:** Educational tool. Output is not investment advice.
+
+---
+
+## 1. Install
+
+```bash
+# from a clone
+pipx install --editable .
+# or, in a regular venv
+pip install -e ".[dev,openai]"
+```
+
+The console entry-point is `ss`:
+
+```bash
+ss --help
+```
+
+---
+
+## 2. One-time setup
+
+### 2.1 Provide an LLM API key
+
+Three ways, highest precedence first:
+
+```bash
+# 1. per-invocation flag
+ss screen --cap lg --api-key "sk-..."
+
+# 2. environment variable (recommended)
+export SS_LLM_API_KEY="sk-..."
+
+# 3. persisted in ~/.ss/config.toml
+ss config set --api-key "sk-..."
+```
+
+### 2.2 Pick an LLM vendor
+
+Default is **OpenAI**. You can switch any time:
+
+```bash
+# Anthropic
+ss config set --provider anthropic --model claude-3-5-sonnet-latest
+
+# Google Gemini
+ss config set --provider gemini --model gemini-1.5-pro
+
+# Local Ollama (no key needed)
+ss config set --provider ollama --model llama3.1:8b
+
+# CI / dry-run (no real model)
+ss config set --provider stub
+```
+
+### 2.3 Build the universe (run once a month)
+
+```bash
+ss universe refresh                  # full NSE pull + market-cap enrichment
+ss universe refresh --no-enrich      # faster, no m-cap buckets
+ss universe refresh --limit 200      # debug mode — just the first 200 tickers
+ss universe show --cap lg --limit 25
+```
+
+---
+
+## 3. The headline command — `ss screen`
+
+```bash
+ss screen --cap lg --top 10 --horizon long
+```
+
+### 3.1 Flags at a glance
+
+| Flag | Short | Default | Purpose |
+|---|---|---|---|
+| `--cap` | `-c` | required | Market-cap bucket: `lg` / `md` / `sm` |
+| `--top` | `-n` | 10 | How many recommendations to print |
+| `--horizon` | `-H` | `long` | `short` (<6m) / `mid` (6–24m) / `long` (24m+) |
+| `--profile` | `-p` | `composite` | Scoring style: `composite` / `value` / `growth` / `quality` / `momentum` |
+| `--sector` | `-s` | — | Comma-sep sector whitelist (`IT,Pharma`) |
+| `--exclude` | — | — | Comma-sep sector blacklist |
+| `--max-risk` | — | — | Cap risk % (0–100) |
+| `--api-key` | — | — | One-shot LLM key |
+| `--no-llm` | — | off | Quant-only run, skip the LLM analyst |
+| `--format` | `-f` | `rich` | `rich` / `json` / `md` |
+| `--explain` | — | off | Print full LLM thesis per pick |
+| `--universe-limit` | — | — | Truncate universe (debug / cost-control) |
+| `--verbose` | `-v` | off | Debug logs to stderr |
+
+### 3.2 Realistic recipes
+
+#### Conservative large-cap, long-horizon, value tilt
+```bash
+ss screen --cap lg --top 10 --horizon long --profile value --max-risk 35 --explain
+```
+
+#### Aggressive small-cap, growth tilt, exclude PSU & power
+```bash
+ss screen --cap sm --top 8 --horizon mid --profile growth \
+          --exclude "Power,PSU Bank" --max-risk 75
+```
+
+#### Sector-focused mid-cap IT pick
+```bash
+ss screen --cap md --top 5 --sector "IT,Information Technology" \
+          --horizon long --explain
+```
+
+#### Dividend / quality income basket
+```bash
+ss screen --cap lg --top 12 --profile quality --horizon long \
+          --max-risk 25 --format md > my_picks.md
+```
+
+#### Cost-controlled run (no LLM, smaller universe)
+```bash
+ss screen --cap sm --top 5 --no-llm --universe-limit 200
+```
+
+#### Pipe JSON into another tool
+```bash
+ss screen --cap lg --top 20 --format json | jq '.[] | {symbol, score, risk_pct}'
+```
+
+#### Persist to a Markdown journal
+```bash
+ss screen --cap md --top 10 --format md --explain >> journal/$(date +%F).md
+```
+
+### 3.3 What you get
+
+A ranked table such as:
+
+```
+                     Top 10 — Large cap • long horizon
+┏━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┓
+┃  # ┃ Symbol     ┃ Sector       ┃ Score ┃ Convict.  ┃ Risk % ┃ Horizon ┃
+┡━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━┩
+│  1 │ TCS        │ IT           │ 82.4  │ HIGH     │ 18.20  │ long    │
+│  2 │ HDFCBANK   │ Banking      │ 79.1  │ HIGH     │ 22.80  │ long    │
+│  …                                                                    │
+└────┴────────────┴──────────────┴───────┴──────────┴────────┴─────────┘
+Not investment advice. For educational purposes only.
+```
+
+With `--explain` each pick is followed by a panel: `Thesis`, `Key risks`, `Catalysts`, `Suggested entry / stop / target`.
+
+---
+
+## 4. Single-ticker deep dive — `ss analyse`
+
+```bash
+ss analyse RELIANCE
+ss analyse TCS.NS --horizon mid --format md > tcs.md
+ss analyse BSE:RELIANCE --no-llm --verbose
+```
+
+The CLI accepts:
+- `RELIANCE`               (default exchange = NSE)
+- `RELIANCE.NS` / `TCS.BO` (Yahoo style)
+- `NSE:RELIANCE` / `BSE:500325`
+
+---
+
+## 5. Universe management
+
+```bash
+ss universe refresh                      # rebuild listings + caps
+ss universe show                         # full table (paged)
+ss universe show --cap md --limit 50     # only mid-caps, top 50
+```
+
+---
+
+## 6. Config inspection
+
+```bash
+ss config show                           # effective config (key masked)
+ss config set --provider anthropic --model claude-3-5-sonnet-latest
+```
+
+The config file lives at `~/Library/Application Support/ss/config.toml` (macOS) or `~/.config/ss/config.toml` (Linux).
+
+---
+
+## 7. Output formats
+
+### 7.1 Rich (default — interactive use)
+Color-graded score, conviction badges, panels per pick when `--explain`.
+
+### 7.2 JSON (machine-readable)
+```bash
+ss screen --cap lg --top 5 --format json
+```
+Returns an array of `Recommendation` objects suitable for `jq`, dashboards, alerting bots, etc.
+
+### 7.3 Markdown (journaling, sharing)
+```bash
+ss screen --cap lg --top 10 --format md --explain > picks.md
+```
+
+---
+
+## 8. Cost & speed knobs
+
+| Knob | Effect |
+|---|---|
+| `--top N` | More picks → more LLM calls. The tool always sends `3×N` candidates to the LLM stage. |
+| `--no-llm` | Pure-quant run, zero LLM cost. |
+| `--universe-limit K` | Cap universe size for cheaper / faster runs. |
+| `LLMConfig.max_rpm` / `max_tpm` | Hard rate-limits in `~/.ss/config.toml`. |
+| Cache TTLs in config | A re-run within TTL costs zero API calls. |
+| `--profile value/growth/...` | Same cost as composite — picks differ. |
+
+A typical large-cap top-10 run with warm cache: **< 60s** and **< $0.05** of OpenAI tokens on `gpt-4o-mini`.
+
+---
+
+## 9. Common workflows
+
+### Daily watchlist
+```bash
+ss screen --cap lg --top 10 --max-risk 30 --format md --explain \
+   > "$HOME/watchlist/$(date +%F).md"
+```
+
+### Compare LLM vendors on the same universe
+```bash
+SS_LLM_PROVIDER=openai    ss screen --cap md --top 10 --format json > openai.json
+SS_LLM_PROVIDER=anthropic ss screen --cap md --top 10 --format json > anthropic.json
+diff <(jq -r '.[].symbol' openai.json) <(jq -r '.[].symbol' anthropic.json)
+```
+
+### Dry-run with the stub LLM (CI)
+```bash
+ss config set --provider stub
+ss screen --cap lg --top 5 --universe-limit 50
+```
+
+### Cost-free quant-only run
+```bash
+ss screen --cap sm --top 20 --no-llm --profile growth
+```
+
+### Rebuild everything from scratch
+```bash
+rm -rf ~/.ss
+ss universe refresh --limit 500
+ss screen --cap lg --top 10
+```
+
+---
+
+## 10. Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `Universe is empty. Run \`ss universe refresh\`` | Run it once — see §2.3. |
+| `LLM provider 'openai' requires an API key` | Set `--api-key`, `SS_LLM_API_KEY`, or `ss config set --api-key`. |
+| `error: Unknown market-cap code 'large'` | Use `lg` / `md` / `sm`. |
+| Slow first run | Cold cache. Subsequent runs are fast (TTL 7d on fundamentals, 24h on prices). |
+| Provider 4xx / rate-limit | Retry with `-v`; the tool already does exponential back-off. |
+| Want to wipe the cache | `rm ~/.ss/cache.db` (or your platform's equivalent). |
+
+---
+
+## 11. Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | Success |
+| 1 | Runtime error (provider down, LLM refusal, persistence) |
+| 2 | User error (bad args, missing config) |
+
+---
+
+## 12. Pipelining ideas
+
+```bash
+# Slack notification on top large-cap pick
+ss screen --cap lg --top 1 --format json |
+   jq -r '.[0] | "Today: \(.symbol) score \(.score) risk \(.risk_pct)%"' |
+   xargs -I {} curl -X POST -d '{"text":"{}"}' "$SLACK_WEBHOOK"
+
+# Cron — daily report
+0 9 * * 1-5 SS_LLM_API_KEY=$SECRET ss screen --cap lg --top 10 \
+   --format md --explain > /var/reports/$(date +\%F).md
+```
+
+---
+
+## 13. Disclaimer
+
+This tool aggregates publicly available data and uses an LLM to narrate it. It does **not**:
+- Constitute investment advice.
+- Account for your personal financial situation.
+- Place orders or interact with any brokerage.
+
+You alone are responsible for your investment decisions.

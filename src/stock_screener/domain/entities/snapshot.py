@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -21,7 +21,7 @@ class CompanySnapshot(BaseModel):
     fundamentals: Fundamentals | None = None
     prices: PriceSeries | None = None
     news: tuple[NewsItem, ...] = Field(default_factory=tuple)
-    fetched_at: datetime = Field(default_factory=datetime.utcnow)
+    fetched_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @property
     def has_minimum_data(self) -> bool:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Tuple
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -39,7 +39,7 @@ class Recommendation(BaseModel):
     catalysts: tuple[str, ...] = Field(default_factory=tuple)
 
     citations: tuple[str, ...] = Field(default_factory=tuple)
-    data_freshness: datetime = Field(default_factory=datetime.utcnow)
+    data_freshness: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 __all__ = ["Recommendation"]
