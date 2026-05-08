@@ -61,12 +61,12 @@ dev = [
 ss = "stock_screener.cli.app:app"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/stock_screener"]
+packages = ["stock_screener"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["."]
 addopts = ["--strict-markers", "-q"]
 markers = [
     "integration: tests that hit recorded fixtures",
@@ -75,7 +75,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["src/stock_screener"]
+source = ["stock_screener"]
 branch = true
 
 [tool.coverage.report]
@@ -89,7 +89,7 @@ exclude_lines = [
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-src = ["src", "tests"]
+src = [".", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "N", "SIM", "C4"]
