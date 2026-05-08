@@ -117,11 +117,27 @@ class MaxRiskSpec(Specification[Recommendation]):
 
 
 @dataclass(frozen=True, slots=True)
+class MinRiskSpec(Specification[Recommendation]):
+    min_risk: Pct
+
+    def is_satisfied_by(self, candidate: Recommendation) -> bool:
+        return candidate.risk_pct.value >= self.min_risk.value
+
+
+@dataclass(frozen=True, slots=True)
 class MinScoreSpec(Specification[Recommendation]):
     min_score: float
 
     def is_satisfied_by(self, candidate: Recommendation) -> bool:
         return candidate.score.value >= self.min_score
+
+
+@dataclass(frozen=True, slots=True)
+class MaxScoreSpec(Specification[Recommendation]):
+    max_score: float
+
+    def is_satisfied_by(self, candidate: Recommendation) -> bool:
+        return candidate.score.value <= self.max_score
 
 
 __all__ = [
@@ -131,5 +147,7 @@ __all__ = [
     "SectorBlacklistSpec",
     "HasMinimumDataSpec",
     "MaxRiskSpec",
+    "MinRiskSpec",
+    "MaxScoreSpec",
     "MinScoreSpec",
 ]

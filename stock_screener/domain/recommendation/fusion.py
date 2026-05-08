@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from ..analytics.risk import RiskBreakdown
 from ..entities.recommendation import Recommendation
 from ..entities.snapshot import CompanySnapshot
+from ..value_objects.action import Action
 from ..value_objects.conviction import Conviction
 from ..value_objects.horizon import Horizon
 from ..value_objects.pct import Pct
@@ -115,6 +116,12 @@ class RecommendationFusionService:
         price = _latest_price(snapshot)
         entry_band, stop, target = _trade_levels(price, horizon)
 
+        action = Action.from_signal(
+            score=quant_score.value,
+            risk_pct=risk_pct.value,
+            conviction_high=(conviction == Conviction.HIGH),
+        )
+
         thesis = llm.thesis_summary if llm is not None else (
             f"Quantitative {scoring_profile} score: {quant_score.value:.1f}/100."
         )
@@ -131,6 +138,7 @@ class RecommendationFusionService:
             .with_conviction(conviction)
             .with_risk_pct(risk_pct)
             .with_horizon(horizon)
+            .with_action(action)
             .with_entry_band(entry_band)
             .with_stop_loss(stop)
             .with_target(target)

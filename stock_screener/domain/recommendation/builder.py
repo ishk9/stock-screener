@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any
 
 from ..entities.recommendation import Recommendation
+from ..value_objects.action import Action
 from ..value_objects.conviction import Conviction
 from ..value_objects.horizon import Horizon
 from ..value_objects.market_cap import MarketCapBucket
@@ -61,6 +62,10 @@ class RecommendationBuilder:
 
     def with_horizon(self, horizon: Horizon) -> "RecommendationBuilder":
         self._fields["suggested_horizon"] = horizon
+        return self
+
+    def with_action(self, action: Action) -> "RecommendationBuilder":
+        self._fields["action"] = action
         return self
 
     def with_entry_band(self, band: tuple[float, float] | None) -> "RecommendationBuilder":

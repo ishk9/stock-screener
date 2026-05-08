@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol, Sequence, runtime_checkable
 
+from ..entities.portfolio_review import PortfolioReview
 from ..entities.recommendation import Recommendation
 
 
@@ -24,6 +25,10 @@ class Renderer(Protocol):
 
     def render_analysis(
         self, rec: Recommendation, opts: RenderOpts
+    ) -> None: ...
+
+    def render_portfolio(
+        self, reviews: Sequence[PortfolioReview], opts: RenderOpts
     ) -> None: ...
 
 

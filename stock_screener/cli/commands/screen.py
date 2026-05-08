@@ -19,6 +19,9 @@ from ...domain.ports.universe_repo import UniverseRepository
 from ...domain.specifications import (
     HasMinimumDataSpec,
     MaxRiskSpec,
+    MaxScoreSpec,
+    MinRiskSpec,
+    MinScoreSpec,
     SectorBlacklistSpec,
     SectorWhitelistSpec,
 )
@@ -58,6 +61,25 @@ def screen_cmd(
     max_risk: Annotated[
         Optional[float],
         typer.Option("--max-risk", help="Maximum acceptable risk %% (0–100)."),
+    ] = None,
+    min_risk: Annotated[
+        Optional[float],
+        typer.Option("--min-risk", help="Minimum risk %% (filter OUT very-safe picks)."),
+    ] = None,
+    min_score: Annotated[
+        Optional[float],
+        typer.Option("--min-score", help="Only show picks with score >= this (0–100)."),
+    ] = None,
+    max_score: Annotated[
+        Optional[float],
+        typer.Option("--max-score", help="Only show picks with score <= this (0–100)."),
+    ] = None,
+    action: Annotated[
+        Optional[str],
+        typer.Option(
+            "--action",
+            help="Only show picks whose call equals one of: BUY, WAIT, AVOID (comma-sep).",
+        ),
     ] = None,
     api_key: Annotated[
         Optional[str],
@@ -101,7 +123,9 @@ def screen_cmd(
         snapshot_specs = snapshot_specs & SectorWhitelistSpec.of(sector.split(","))
     if exclude:
         snapshot_specs = snapshot_specs & SectorBlacklistSpec.of(exclude.split(","))
-    rec_spec = MaxRiskSpec(Pct(max_risk)) if max_risk is not None else None
+    rec_spec = None
+    for s in _build_rec_specs(max_risk, min_risk, min_score, max_score, action):
+        rec_spec = s if rec_spec is None else (rec_spec & s)
 
     universe = container.resolve(UniverseRepository)
     if universe.count() == 0:
@@ -159,6 +183,47 @@ def screen_cmd(
         },
         recs=list(response.recommendations),
     )
+
+
+def _build_rec_specs(
+    max_risk: Optional[float],
+    min_risk: Optional[float],
+    min_score: Optional[float],
+    max_score: Optional[float],
+    action: Optional[str],
+) -> list:
+    """Translate threshold flags into a list of Recommendation specifications."""
+    from dataclasses import dataclass
+
+    from ...domain.entities.recommendation import Recommendation
+    from ...domain.specifications import Specification
+    from ...domain.value_objects.action import Action
+
+    specs: list = []
+    if max_risk is not None:
+        specs.append(MaxRiskSpec(Pct(max_risk)))
+    if min_risk is not None:
+        specs.append(MinRiskSpec(Pct(min_risk)))
+    if min_score is not None:
+        specs.append(MinScoreSpec(min_score))
+    if max_score is not None:
+        specs.append(MaxScoreSpec(max_score))
+    if action is not None:
+        wanted = frozenset(a.strip().upper() for a in action.split(",") if a.strip())
+        try:
+            wanted_actions = frozenset(Action(a) for a in wanted)
+        except ValueError as exc:
+            raise typer.BadParameter(f"unknown action: {exc}") from exc
+
+        @dataclass(frozen=True, slots=True)
+        class _ActionSpec(Specification[Recommendation]):
+            allowed: frozenset[Action]
+
+            def is_satisfied_by(self, candidate: Recommendation) -> bool:
+                return candidate.action in self.allowed
+
+        specs.append(_ActionSpec(wanted_actions))
+    return specs
 
 
 __all__ = ["screen_cmd"]

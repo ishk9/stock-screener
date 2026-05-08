@@ -12,17 +12,19 @@ from .market_data import (
     NewsProvider,
     PriceProvider,
 )
+from .portfolio_repo import PortfolioRepository
 from .renderer import Renderer
 from .universe_repo import UniverseRepository
 
 __all__ = [
     "Cache",
+    "CorporateActionsProvider",
+    "FundamentalsProvider",
     "LLMClient",
     "LLMRequest",
-    "FundamentalsProvider",
-    "PriceProvider",
     "NewsProvider",
-    "CorporateActionsProvider",
-    "UniverseRepository",
+    "PortfolioRepository",
+    "PriceProvider",
     "Renderer",
+    "UniverseRepository",
 ]

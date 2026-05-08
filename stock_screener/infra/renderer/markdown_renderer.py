@@ -5,11 +5,12 @@ from __future__ import annotations
 import sys
 from typing import IO, Sequence
 
+from ...domain.entities.portfolio_review import PortfolioReview
 from ...domain.entities.recommendation import Recommendation
 from ...domain.ports.renderer import RenderOpts
 
 _DISCLAIMER = "_Not investment advice. For educational purposes only._"
-_HEADERS = ("Rank", "Symbol", "Sector", "Score", "Conviction", "Risk %", "Horizon", "Target")
+_HEADERS = ("Rank", "Symbol", "Sector", "Action", "Score", "Conviction", "Risk %", "Horizon", "Target")
 
 
 class MarkdownRenderer:
@@ -33,6 +34,7 @@ class MarkdownRenderer:
                         str(rank),
                         rec.symbol.code,
                         rec.sector or "-",
+                        f"**{rec.action.value}**",
                         f"{rec.score.value:.2f}",
                         rec.conviction.value,
                         f"{rec.risk_pct.value:.1f}",
@@ -67,6 +69,45 @@ class MarkdownRenderer:
         self, rec: Recommendation, opts: RenderOpts
     ) -> None:
         self.render_screen([rec], opts)
+
+    def render_portfolio(
+        self, reviews: Sequence[PortfolioReview], opts: RenderOpts
+    ) -> None:
+        headers = ("Symbol", "Qty", "Avg Buy", "Current", "P&L %", "Action", "Score", "Risk %")
+        lines: list[str] = []
+        lines.append("# Portfolio review")
+        lines.append("")
+        lines.append("| " + " | ".join(headers) + " |")
+        lines.append("|" + "|".join("---" for _ in headers) + "|")
+        for r in reviews:
+            score = r.recommendation.score.value if r.recommendation else None
+            risk = r.recommendation.risk_pct.value if r.recommendation else None
+            lines.append(
+                "| " + " | ".join([
+                    r.position.symbol.code,
+                    f"{r.position.quantity:g}",
+                    f"{r.position.avg_buy_price:.2f}",
+                    "-" if r.current_price is None else f"{r.current_price:.2f}",
+                    "-" if r.unrealised_pnl_pct is None else f"{r.unrealised_pnl_pct:+.2f}%",
+                    f"**{r.action.value}**",
+                    "-" if score is None else f"{score:.1f}",
+                    "-" if risk is None else f"{risk:.1f}",
+                ]) + " |"
+            )
+
+        if opts.explain:
+            for r in reviews:
+                lines.append("")
+                lines.append(f"### {r.position.symbol.code} — {r.action.value}")
+                lines.append("")
+                lines.append(r.rationale)
+                if r.recommendation and r.recommendation.thesis_summary:
+                    lines.append("")
+                    lines.append(f"**Research thesis:** {r.recommendation.thesis_summary}")
+
+        lines.append("")
+        lines.append(_DISCLAIMER)
+        self._write("\n".join(lines) + "\n")
 
     def _write(self, text: str) -> None:
         out = self._stream if self._stream is not None else sys.stdout

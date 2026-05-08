@@ -7,6 +7,7 @@ from typing import Tuple
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..value_objects.action import Action
 from ..value_objects.conviction import Conviction
 from ..value_objects.horizon import Horizon
 from ..value_objects.market_cap import MarketCapBucket
@@ -29,6 +30,7 @@ class Recommendation(BaseModel):
     conviction: Conviction
     risk_pct: Pct
     suggested_horizon: Horizon
+    action: Action = Action.WAIT
 
     entry_band: Tuple[float, float] | None = None
     stop_loss: float | None = None

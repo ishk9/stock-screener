@@ -6,6 +6,7 @@ import json
 import sys
 from typing import IO, Sequence
 
+from ...domain.entities.portfolio_review import PortfolioReview
 from ...domain.entities.recommendation import Recommendation
 from ...domain.ports.renderer import RenderOpts
 
@@ -32,6 +33,13 @@ class JSONRenderer:
         self, rec: Recommendation, opts: RenderOpts
     ) -> None:
         text = json.dumps(rec.model_dump(mode="json"), indent=2, default=str)
+        self._write(text + "\n")
+
+    def render_portfolio(
+        self, reviews: Sequence[PortfolioReview], opts: RenderOpts
+    ) -> None:
+        payload = [r.model_dump(mode="json") for r in reviews]
+        text = json.dumps(payload, indent=2, default=str)
         self._write(text + "\n")
 
     def _write(self, text: str) -> None:

@@ -15,10 +15,12 @@ from .domain.analytics.strategies.composite import CompositeScoringStrategy
 from .domain.ports.cache import Cache
 from .domain.ports.llm_client import LLMClient
 from .domain.ports.market_data import FundamentalsProvider, PriceProvider
+from .domain.ports.portfolio_repo import PortfolioRepository
 from .domain.ports.renderer import Renderer
 from .domain.ports.universe_repo import UniverseRepository
 from .infra.cache.run_repo import RunRepo
 from .infra.cache.sqlite_cache import SqliteCache
+from .infra.cache.sqlite_portfolio_repo import SqlitePortfolioRepository
 from .infra.cache.sqlite_universe_repo import SqliteUniverseRepo
 from .infra.llm.factory import LLMClientFactory
 from .infra.providers.composite_provider import (
@@ -50,6 +52,9 @@ def wire(container: Container, config: Config) -> None:
 
     universe_repo = SqliteUniverseRepo(path=config.cache.path)
     container.register_instance(UniverseRepository, universe_repo)
+
+    portfolio_repo = SqlitePortfolioRepository(path=config.cache.path)
+    container.register_instance(PortfolioRepository, portfolio_repo)
 
     run_repo = RunRepo(path=config.cache.path)
     container.register_instance(RunRepo, run_repo)

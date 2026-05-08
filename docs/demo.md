@@ -86,12 +86,24 @@ ss screen --cap lg --top 10 --horizon long
 | `--sector` | `-s` | — | Comma-sep sector whitelist (`IT,Pharma`) |
 | `--exclude` | — | — | Comma-sep sector blacklist |
 | `--max-risk` | — | — | Cap risk % (0–100) |
+| `--min-risk` | — | — | Floor on risk % (filter OUT very-safe picks) |
+| `--min-score` | — | — | Only show picks with score ≥ this (0–100) |
+| `--max-score` | — | — | Only show picks with score ≤ this (0–100) |
+| `--action` | — | — | Only show picks whose call is in `BUY,WAIT,AVOID` (comma-sep) |
 | `--api-key` | — | — | One-shot LLM key |
 | `--no-llm` | — | off | Quant-only run, skip the LLM analyst |
 | `--format` | `-f` | `rich` | `rich` / `json` / `md` |
 | `--explain` | — | off | Print full LLM thesis per pick |
 | `--universe-limit` | — | — | Truncate universe (debug / cost-control) |
 | `--verbose` | `-v` | off | Debug logs to stderr |
+
+Each pick now also carries an explicit **call to action**:
+
+| Action | Meaning |
+|---|---|
+| **BUY** | Score ≥ 65 and risk ≤ 50 (or HIGH conviction and score ≥ 60). Initiate now. |
+| **WAIT** | Decent setup but conditions not actionable yet — keep on watchlist. |
+| **AVOID** | Score < 40 or risk ≥ 75 — do not initiate. |
 
 ### 3.2 Realistic recipes
 
@@ -121,6 +133,21 @@ ss screen --cap lg --top 12 --profile quality --horizon long \
 #### Cost-controlled run (no LLM, smaller universe)
 ```bash
 ss screen --cap sm --top 5 --no-llm --universe-limit 200
+```
+
+#### Threshold filtering — only the actionable, only BUYs
+```bash
+ss screen --cap lg --top 20 --min-score 70 --max-risk 40 --action BUY
+```
+
+#### Find higher-risk / higher-reward setups (small caps with score ≥ 75 *and* risk ≥ 50)
+```bash
+ss screen --cap sm --top 10 --min-score 75 --min-risk 50
+```
+
+#### Borderline picks for a watchlist (50 ≤ score ≤ 65)
+```bash
+ss screen --cap md --top 15 --min-score 50 --max-score 65 --action WAIT
 ```
 
 #### Pipe JSON into another tool
@@ -165,6 +192,88 @@ The CLI accepts:
 - `RELIANCE`               (default exchange = NSE)
 - `RELIANCE.NS` / `TCS.BO` (Yahoo style)
 - `NSE:RELIANCE` / `BSE:500325`
+
+---
+
+## 4b. Portfolio management & review — `ss portfolio`
+
+You can persist your held positions and ask `ss` what to do with each one.
+Storage is the same SQLite file that powers the cache (no extra setup).
+
+### 4b.1 Sub-commands
+
+| Command | Purpose |
+|---|---|
+| `ss portfolio add TICKER AVG_PRICE [--qty N] [--bought-on YYYY-MM-DD] [--notes ...]` | Record a holding |
+| `ss portfolio remove TICKER` | Delete one holding |
+| `ss portfolio show` | List all holdings (no network) |
+| `ss portfolio review` | **Run a fresh analysis** and recommend `ADD` / `HOLD` / `TRIM` / `EXIT` per holding |
+| `ss portfolio import file.csv [--replace]` | Bulk-load from CSV |
+| `ss portfolio clear --yes` | Wipe all positions |
+
+### 4b.2 Action vocabulary (held positions)
+
+| Action | When |
+|---|---|
+| **ADD** | Strong score (≥ 65) with risk ≤ 55 — average down/up, the thesis is intact |
+| **HOLD** | Neutral signal — no urgent action |
+| **TRIM** | Up ≥ +50 % with weakening signal — book partial profit |
+| **EXIT** | Score < 35, stop-loss breached (-25 % default), or risk ≥ 80 with negative P&L |
+
+### 4b.3 Workflow examples
+
+#### Add a few positions, see them, then review
+```bash
+ss portfolio add RELIANCE 2450 --qty 10 --bought-on 2024-09-15
+ss portfolio add TCS 3680 --qty 5
+ss portfolio add HDFCBANK 1480 --qty 20 --notes "core holding"
+ss portfolio show
+ss portfolio review --explain
+```
+
+#### Quick review without LLM (zero token cost)
+```bash
+ss portfolio review --no-llm
+```
+
+#### Mid-horizon review piped to a Markdown journal
+```bash
+ss portfolio review --horizon mid --format md --explain > "$(date +%F)-portfolio.md"
+```
+
+#### Get JSON for a dashboard
+```bash
+ss portfolio review --format json | jq '.[] | {symbol: .position.symbol.code, action, pnl_pct: .unrealised_pnl_pct}'
+```
+
+#### Bulk-load from CSV
+`portfolio.csv`:
+```
+symbol,avg_price,qty,bought_on,notes
+RELIANCE,2450,10,2024-09-15,core
+TCS,3680,5,2024-08-12,
+HDFCBANK,1480,20,,
+```
+```bash
+ss portfolio import portfolio.csv --replace
+ss portfolio review --explain
+```
+
+### 4b.4 What you get
+
+```
+                                Portfolio review
+┏━━━━━━━━━━┳━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━┳━━━━━━━━┓
+┃ Symbol   ┃ Qty┃ Avg Buy ┃ Current ┃   P&L % ┃ Action  ┃  Score ┃ Risk % ┃
+┡━━━━━━━━━━╇━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━╇━━━━━━━━┩
+│ RELIANCE │ 10 │ 2450.00 │ 2891.50 │ +18.02% │  ADD    │ 78.4   │  31.2  │
+│ TCS      │  5 │ 3680.00 │ 3520.00 │  -4.35% │  HOLD   │ 62.1   │  29.4  │
+│ HDFCBANK │ 20 │ 1480.00 │ 1142.00 │ -22.84% │  EXIT   │ 38.6   │  61.0  │
+└──────────┴────┴─────────┴─────────┴─────────┴─────────┴────────┴────────┘
+Portfolio  cost ₹61,800  value ₹74,055  P&L +12,255 (+19.83%)
+```
+
+With `--explain` each line gets a Panel containing the rationale and (if `--no-llm` not set) the full LLM thesis.
 
 ---
 
