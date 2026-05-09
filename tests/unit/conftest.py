@@ -128,3 +128,48 @@ def trend_prices_factory():
 @pytest.fixture
 def company_factory():
     return make_company
+
+
+@pytest.fixture
+def silence_logging(monkeypatch: pytest.MonkeyPatch):
+    """Silence structlog + project logger setup for CLI invocation tests.
+
+    Required for CLI tests because structlog's default ``PrintLoggerFactory``
+    writes to ``sys.stdout``, which contaminates ``--format json``/``md`` output.
+    Tests that rely on real log output should NOT request this fixture.
+    """
+    import logging
+    import structlog
+
+    from stock_screener.core import logging as logging_mod
+
+    monkeypatch.setattr(logging_mod, "_CONFIGURED", True)
+
+    def _noop(self, *args, **kwargs) -> None:  # noqa: ANN001
+        return None
+
+    for method in (
+        "msg",
+        "log",
+        "debug",
+        "info",
+        "warning",
+        "warn",
+        "error",
+        "err",
+        "critical",
+        "fatal",
+        "exception",
+        "failure",
+    ):
+        monkeypatch.setattr(structlog.PrintLogger, method, _noop)
+
+    structlog.reset_defaults()
+    structlog.configure(
+        processors=[],
+        wrapper_class=structlog.make_filtering_bound_logger(logging.CRITICAL),
+        logger_factory=structlog.ReturnLoggerFactory(),
+        cache_logger_on_first_use=False,
+    )
+    yield
+    structlog.reset_defaults()
