@@ -7,6 +7,7 @@ from typing import Any
 
 from ...core.errors import LLMError, LLMRateLimitError
 from ...domain.ports.llm_client import LLMRequest
+from ...domain.value_objects.chat import ChatMessage
 from .base import BaseLLMClient
 
 
@@ -55,6 +56,33 @@ class OpenAIClient(BaseLLMClient):
                 response_format={"type": "json_object"},
                 temperature=request.temperature,
                 max_tokens=request.max_tokens,
+                timeout=self._timeout_s,
+            )
+        except Exception as exc:
+            raise self._map_error(exc) from exc
+
+        try:
+            content = completion.choices[0].message.content
+        except (AttributeError, IndexError, TypeError) as exc:
+            raise LLMError(f"Malformed OpenAI response: {exc}") from exc
+
+        if content is None:
+            raise LLMError("OpenAI returned empty content")
+        return content
+
+    async def _chat_model(
+        self,
+        messages: list[ChatMessage],
+        *,
+        temperature: float,
+        max_tokens: int,
+    ) -> str:
+        try:
+            completion = self._client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": m.role, "content": m.content} for m in messages],
+                temperature=temperature,
+                max_tokens=max_tokens,
                 timeout=self._timeout_s,
             )
         except Exception as exc:

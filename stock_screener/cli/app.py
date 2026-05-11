@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import typer
 
-from .commands import analyse, config, portfolio, screen, universe
+from .commands import analyse, chat, config, portfolio, screen, universe
 
 app = typer.Typer(
     name="ss",
@@ -21,6 +21,7 @@ app.command("screen", help="Screen companies by market-cap bucket.")(screen.scre
 app.command("analyse", help="Deep-dive analysis on one ticker.")(analyse.analyse_cmd)
 app.add_typer(universe.app, name="universe", help="Manage the company universe.")
 app.add_typer(portfolio.app, name="portfolio", help="Manage and review held positions.")
+app.add_typer(chat.app, name="chat", help="Persistent multi-turn chat about the market and your portfolio.")
 app.add_typer(config.app, name="config", help="View / set configuration.")
 
 

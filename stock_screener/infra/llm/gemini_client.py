@@ -7,6 +7,7 @@ from typing import Any
 
 from ...core.errors import LLMError, LLMRateLimitError
 from ...domain.ports.llm_client import LLMRequest
+from ...domain.value_objects.chat import ChatMessage
 from .base import BaseLLMClient
 
 
@@ -62,6 +63,36 @@ class GeminiClient(BaseLLMClient):
                     "response_mime_type": "application/json",
                     "temperature": request.temperature,
                     "max_output_tokens": request.max_tokens,
+                },
+            )
+        except Exception as exc:
+            raise self._map_error(exc) from exc
+
+        text = getattr(response, "text", None)
+        if not text:
+            raise LLMError("Gemini returned empty content")
+        return text
+
+    async def _chat_model(
+        self,
+        messages: list[ChatMessage],
+        *,
+        temperature: float,
+        max_tokens: int,
+    ) -> str:
+        # Gemini doesn't natively distinguish system; prepend any system text.
+        parts: list[str] = []
+        for m in messages:
+            tag = {"system": "[system]", "user": "[user]", "assistant": "[assistant]"}[m.role]
+            parts.append(f"{tag}\n{m.content}")
+        contents = "\n\n".join(parts)
+        try:
+            response = self._client.models.generate_content(
+                model=self.model,
+                contents=contents,
+                config={
+                    "temperature": temperature,
+                    "max_output_tokens": max_tokens,
                 },
             )
         except Exception as exc:

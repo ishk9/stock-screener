@@ -277,6 +277,67 @@ With `--explain` each line gets a Panel containing the rationale and (if `--no-l
 
 ---
 
+## 4c. Conversational assistant — `ss chat`
+
+A persistent, multi-turn chat with the LLM about the Indian market, individual stocks, or your portfolio. Sessions are saved to SQLite so you can come back to them any time.
+
+### 4c.1 Start a new chat
+
+```bash
+ss chat
+```
+
+You drop straight into a REPL. Just type and press Enter. The first message becomes the chat title automatically.
+
+```
+[c-x4f2k1] you ▶ what's your view on RELIANCE for the next 12 months?
+[c-x4f2k1] you ▶ and how does it compare to ONGC?
+[c-x4f2k1] you ▶ /exit
+```
+
+Each turn includes context the LLM can use:
+- Today's date.
+- Your current portfolio (from `ss portfolio`).
+- Any tickers in your message that exist in the cached universe — their name, sector, market cap and bucket are auto-injected.
+
+### 4c.2 Slash commands inside the REPL
+
+| Command | What it does |
+|---|---|
+| `/help` | List all slash commands |
+| `/list` | Show every saved chat with its id and turn count |
+| `/switch <id\|index>` | Switch to another chat without losing history |
+| `/new [title]` | Start a fresh chat in this session |
+| `/show [id\|index]` | Re-print history (defaults to current chat) |
+| `/pin` / `/unpin` | Pin (or unpin) the current chat to the top of the list |
+| `/rename <new title>` | Rename the current chat |
+| `/delete [id\|index]` | Delete a chat (current chat if omitted) |
+| `/clear` | Clear the screen |
+| `/exit` (or `Ctrl-D`) | Leave the REPL |
+
+Anything that doesn't start with `/` is sent to the LLM.
+
+### 4c.3 Manage chats from the shell
+
+```bash
+ss chat list                              # pinned first, then most-recent
+ss chat show c-x4f2k1                     # full transcript
+ss chat resume c-x4f2k1                   # re-enter REPL with this chat
+ss chat pin c-x4f2k1                      # pin / unpin
+ss chat unpin 2                           # using the list-index instead of id
+ss chat rename c-x4f2k1 "Reliance thesis"
+ss chat delete c-x4f2k1 --yes             # skip confirmation
+```
+
+Anywhere a chat id is accepted you can also pass the 1-based index from `ss chat list`.
+
+### 4c.4 Tips
+
+- Without an LLM key configured (`SS_LLM_PROVIDER=stub` or no key at all), the chat falls back to a deterministic stub reply — useful for testing the plumbing without burning credits.
+- The chat *does not* fetch live prices or news. If you need fresh fundamentals, run `ss analyse <TICKER>` in another terminal and reference the output in your message.
+
+---
+
 ## 5. Universe management
 
 ```bash

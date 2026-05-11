@@ -13,6 +13,7 @@ from .core.di import Container
 from .core.events import EventBus
 from .domain.analytics.strategies.composite import CompositeScoringStrategy
 from .domain.ports.cache import Cache
+from .domain.ports.chat_repo import ChatRepository
 from .domain.ports.llm_client import LLMClient
 from .domain.ports.market_data import FundamentalsProvider, PriceProvider
 from .domain.ports.portfolio_repo import PortfolioRepository
@@ -20,6 +21,7 @@ from .domain.ports.renderer import Renderer
 from .domain.ports.universe_repo import UniverseRepository
 from .infra.cache.run_repo import RunRepo
 from .infra.cache.sqlite_cache import SqliteCache
+from .infra.cache.sqlite_chat_repo import SqliteChatRepository
 from .infra.cache.sqlite_portfolio_repo import SqlitePortfolioRepository
 from .infra.cache.sqlite_universe_repo import SqliteUniverseRepo
 from .infra.llm.factory import LLMClientFactory
@@ -55,6 +57,9 @@ def wire(container: Container, config: Config) -> None:
 
     portfolio_repo = SqlitePortfolioRepository(path=config.cache.path)
     container.register_instance(PortfolioRepository, portfolio_repo)
+
+    chat_repo = SqliteChatRepository(path=config.cache.path)
+    container.register_instance(ChatRepository, chat_repo)
 
     run_repo = RunRepo(path=config.cache.path)
     container.register_instance(RunRepo, run_repo)

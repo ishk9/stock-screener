@@ -7,6 +7,7 @@ from typing import Any
 
 from ...core.errors import LLMError, LLMRateLimitError
 from ...domain.ports.llm_client import LLMRequest
+from ...domain.value_objects.chat import ChatMessage
 from .base import BaseLLMClient
 
 _JSON_SUFFIX = (
@@ -56,6 +57,43 @@ class AnthropicClient(BaseLLMClient):
                 messages=[{"role": "user", "content": request.user}],
                 temperature=request.temperature,
             )
+        except Exception as exc:
+            raise self._map_error(exc) from exc
+
+        try:
+            block = message.content[0]
+            text = getattr(block, "text", None) or block["text"]
+        except (AttributeError, IndexError, KeyError, TypeError) as exc:
+            raise LLMError(f"Malformed Anthropic response: {exc}") from exc
+
+        if not text:
+            raise LLMError("Anthropic returned empty content")
+        return text
+
+    async def _chat_model(
+        self,
+        messages: list[ChatMessage],
+        *,
+        temperature: float,
+        max_tokens: int,
+    ) -> str:
+        system_parts = [m.content for m in messages if m.role == "system"]
+        system_prompt = "\n\n".join(system_parts) if system_parts else None
+        api_messages = [
+            {"role": m.role, "content": m.content}
+            for m in messages
+            if m.role in ("user", "assistant")
+        ]
+        kwargs: dict[str, Any] = {
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "messages": api_messages,
+            "temperature": temperature,
+        }
+        if system_prompt:
+            kwargs["system"] = system_prompt
+        try:
+            message = self._client.messages.create(**kwargs)
         except Exception as exc:
             raise self._map_error(exc) from exc
 

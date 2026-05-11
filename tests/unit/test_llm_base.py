@@ -28,6 +28,9 @@ class _CannedClient(BaseLLMClient):
     async def _call_model(self, request: LLMRequest) -> str:
         return self._payload
 
+    async def _chat_model(self, messages, *, temperature, max_tokens):  # pragma: no cover
+        return ""
+
 
 class _RaisingClient(BaseLLMClient):
     name = "raising"
@@ -37,6 +40,9 @@ class _RaisingClient(BaseLLMClient):
         self._exc = exc
 
     async def _call_model(self, request: LLMRequest) -> str:
+        raise self._exc
+
+    async def _chat_model(self, messages, *, temperature, max_tokens):  # pragma: no cover
         raise self._exc
 
 
