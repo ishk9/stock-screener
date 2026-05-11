@@ -69,6 +69,87 @@ def add(
 
 
 # --------------------------------------------------------------------------- #
+# update — partial edit of an existing position
+# --------------------------------------------------------------------------- #
+@app.command(
+    "update",
+    help="Update fields on an existing position. Only supplied flags change.",
+)
+def update(
+    ticker: Annotated[str, typer.Argument(help="Ticker of the position to edit.")],
+    avg_price: Annotated[
+        Optional[float],
+        typer.Option("--avg-price", "-p", help="New average buy price (₹)."),
+    ] = None,
+    qty: Annotated[
+        Optional[float],
+        typer.Option("--qty", "-q", help="New quantity."),
+    ] = None,
+    bought_on: Annotated[
+        Optional[str],
+        typer.Option("--bought-on", help="New ISO date yyyy-mm-dd (or 'clear' to remove)."),
+    ] = None,
+    notes: Annotated[
+        Optional[str],
+        typer.Option("--notes", help="New notes (or 'clear' to remove)."),
+    ] = None,
+) -> None:
+    if avg_price is None and qty is None and bought_on is None and notes is None:
+        typer.echo(
+            "error: nothing to update — pass at least one of "
+            "--avg-price / --qty / --bought-on / --notes.",
+            err=True,
+        )
+        raise typer.Exit(2)
+
+    config = Config.load()
+    container = make_default_container(config)
+    repo = container.resolve(PortfolioRepository)
+    symbol = Symbol.parse(ticker)
+    existing = repo.get(symbol.code)
+    if existing is None:
+        typer.echo(
+            f"error: no position for {symbol.code}. "
+            f"Use `ss portfolio add` to create it first.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    new_bought_on = existing.bought_on
+    if bought_on is not None:
+        if bought_on.strip().lower() == "clear":
+            new_bought_on = None
+        else:
+            try:
+                new_bought_on = date.fromisoformat(bought_on)
+            except ValueError as exc:
+                typer.echo(f"error: invalid date {bought_on!r}: {exc}", err=True)
+                raise typer.Exit(2) from exc
+
+    new_notes = existing.notes
+    if notes is not None:
+        new_notes = None if notes.strip().lower() == "clear" else notes
+
+    try:
+        updated = Position(
+            symbol=existing.symbol,
+            avg_buy_price=avg_price if avg_price is not None else existing.avg_buy_price,
+            quantity=qty if qty is not None else existing.quantity,
+            bought_on=new_bought_on,
+            notes=new_notes,
+        )
+    except ValueError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+    repo.upsert(updated)
+    typer.echo(
+        f"Updated {symbol.code} — qty {updated.quantity:g} @ ₹{updated.avg_buy_price:,.2f} "
+        f"(cost ₹{updated.cost_basis:,.2f})."
+    )
+
+
+# --------------------------------------------------------------------------- #
 # remove
 # --------------------------------------------------------------------------- #
 @app.command("remove", help="Remove a position.")

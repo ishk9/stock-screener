@@ -174,6 +174,142 @@ def test_portfolio_add_invalid_bought_on_exits_2(
     assert res.exit_code == 2
 
 
+def test_portfolio_update_changes_only_supplied_fields(
+    runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    container = _basic_container(db_path=tmp_path / "x.db")
+    _patch(monkeypatch, container)
+
+    runner.invoke(
+        app,
+        ["portfolio", "add", "RELIANCE", "2000", "--qty", "10", "--bought-on", "2024-01-05"],
+        env={"SS_LLM_API_KEY": "test"},
+    )
+    res = runner.invoke(
+        app,
+        ["portfolio", "update", "RELIANCE", "--qty", "20"],
+        env={"SS_LLM_API_KEY": "test"},
+    )
+    assert res.exit_code == 0, res.stderr
+    repo = container.resolve(PortfolioRepository)
+    pos = repo.get("RELIANCE")
+    assert pos is not None
+    assert pos.quantity == 20
+    # other fields preserved
+    assert pos.avg_buy_price == 2000
+    assert pos.bought_on is not None and pos.bought_on.isoformat() == "2024-01-05"
+
+
+def test_portfolio_update_avg_price_only(
+    runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    container = _basic_container(db_path=tmp_path / "x.db")
+    _patch(monkeypatch, container)
+
+    runner.invoke(
+        app, ["portfolio", "add", "TCS", "3000", "--qty", "5"],
+        env={"SS_LLM_API_KEY": "test"},
+    )
+    res = runner.invoke(
+        app, ["portfolio", "update", "TCS", "--avg-price", "3500"],
+        env={"SS_LLM_API_KEY": "test"},
+    )
+    assert res.exit_code == 0
+    pos = container.resolve(PortfolioRepository).get("TCS")
+    assert pos is not None and pos.avg_buy_price == 3500
+    assert pos.quantity == 5  # unchanged
+
+
+def test_portfolio_update_clear_bought_on_and_notes(
+    runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    container = _basic_container(db_path=tmp_path / "x.db")
+    _patch(monkeypatch, container)
+
+    runner.invoke(
+        app,
+        ["portfolio", "add", "INFY", "1500", "--qty", "10", "--bought-on", "2024-06-01", "--notes", "lt hold"],
+        env={"SS_LLM_API_KEY": "test"},
+    )
+    res = runner.invoke(
+        app,
+        ["portfolio", "update", "INFY", "--bought-on", "clear", "--notes", "clear"],
+        env={"SS_LLM_API_KEY": "test"},
+    )
+    assert res.exit_code == 0
+    pos = container.resolve(PortfolioRepository).get("INFY")
+    assert pos is not None
+    assert pos.bought_on is None
+    assert pos.notes is None
+
+
+def test_portfolio_update_missing_position_exits_1(
+    runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    container = _basic_container(db_path=tmp_path / "x.db")
+    _patch(monkeypatch, container)
+
+    res = runner.invoke(
+        app,
+        ["portfolio", "update", "GHOST", "--qty", "10"],
+        env={"SS_LLM_API_KEY": "test"},
+    )
+    assert res.exit_code == 1
+    assert "no position" in res.stderr.lower()
+
+
+def test_portfolio_update_no_flags_exits_2(
+    runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    container = _basic_container(db_path=tmp_path / "x.db")
+    _patch(monkeypatch, container)
+
+    runner.invoke(
+        app, ["portfolio", "add", "RELIANCE", "2000"],
+        env={"SS_LLM_API_KEY": "test"},
+    )
+    res = runner.invoke(
+        app, ["portfolio", "update", "RELIANCE"],
+        env={"SS_LLM_API_KEY": "test"},
+    )
+    assert res.exit_code == 2
+    assert "nothing to update" in res.stderr.lower()
+
+
+def test_portfolio_update_invalid_date_exits_2(
+    runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    container = _basic_container(db_path=tmp_path / "x.db")
+    _patch(monkeypatch, container)
+
+    runner.invoke(
+        app, ["portfolio", "add", "WIPRO", "500"],
+        env={"SS_LLM_API_KEY": "test"},
+    )
+    res = runner.invoke(
+        app, ["portfolio", "update", "WIPRO", "--bought-on", "yesterday"],
+        env={"SS_LLM_API_KEY": "test"},
+    )
+    assert res.exit_code == 2
+
+
+def test_portfolio_update_invalid_qty_exits_2(
+    runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    container = _basic_container(db_path=tmp_path / "x.db")
+    _patch(monkeypatch, container)
+
+    runner.invoke(
+        app, ["portfolio", "add", "HDFC", "1500"],
+        env={"SS_LLM_API_KEY": "test"},
+    )
+    res = runner.invoke(
+        app, ["portfolio", "update", "HDFC", "--qty", "-1"],
+        env={"SS_LLM_API_KEY": "test"},
+    )
+    assert res.exit_code == 2
+
+
 def test_portfolio_remove_missing_exits_1(
     runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

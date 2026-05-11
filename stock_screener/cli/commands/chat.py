@@ -24,6 +24,7 @@ from ...core.result import Err, Ok
 from ...domain.entities.chat import Chat
 from ...domain.ports.chat_repo import ChatRepository
 from ...domain.ports.llm_client import LLMClient
+from ...domain.ports.market_data import FundamentalsProvider, PriceProvider
 from ...domain.ports.portfolio_repo import PortfolioRepository
 from ...domain.ports.universe_repo import UniverseRepository
 from ...usecases.chat_service import ChatService
@@ -44,12 +45,40 @@ def _build_service(api_key: Optional[str] = None, *, verbose: bool = False) -> C
     configure_logging("DEBUG" if verbose else "INFO")
     config = Config.load(api_key=api_key)
     container = make_default_container(config)
+
+    def _try(port):  # graceful degradation if a port isn't registered
+        try:
+            return container.resolve(port)
+        except Exception:  # noqa: BLE001
+            return None
+
     return ChatService(
         chats=container.resolve(ChatRepository),
         llm=container.resolve(LLMClient),
-        portfolio=container.resolve(PortfolioRepository),
-        universe=container.resolve(UniverseRepository),
+        portfolio=_try(PortfolioRepository),
+        universe=_try(UniverseRepository),
+        prices=_try(PriceProvider),
+        fundamentals=_try(FundamentalsProvider),
     )
+
+
+def _resolve_in_repl(service: ChatService, ref: str) -> Chat | None:
+    """Resolve a chat reference inside the REPL; print a friendly error on miss/ambiguity."""
+    match = service.resolve_detailed(ref)
+    if isinstance(match, Chat):
+        return match
+    if isinstance(match, list):
+        console.print(
+            f"[red]{ref!r} is ambiguous — {len(match)} chats match:[/red]"
+        )
+        for c in match:
+            console.print(f"  [dim]{c.id}[/dim]  {c.title}")
+        return None
+    console.print(
+        f"[red]no chat matches[/red] {ref!r} "
+        f"[dim](try /list to see ids and indexes)[/dim]"
+    )
+    return None
 
 
 def _resolve_or_die(service: ChatService, ref: str) -> Chat:
@@ -253,6 +282,8 @@ Slash commands:
   /unpin               unpin the current chat
   /rename <title>      rename the current chat
   /delete <id|index>   delete a chat (current chat if omitted)
+  /debug <question>    show the raw context (incl. live prices) that the LLM
+                       would receive for <question>. No LLM call is made.
   /clear               clear the screen
   /exit                exit (Ctrl-D also works)
 
@@ -318,6 +349,21 @@ def _handle_slash(service: ChatService, current: Chat, raw: str) -> Chat | None:
         _print_chat_header(current)
         return current
 
+    if cmd == "debug":
+        if not rest:
+            console.print("[red]usage:[/red] /debug <question>")
+            return current
+        with console.status("[cyan]fetching live data…[/cyan]", spinner="dots"):
+            context = asyncio.run(service.preview_context(rest))
+        console.print(
+            Panel(
+                context,
+                border_style="magenta",
+                title=f"context for: {rest!r}",
+            )
+        )
+        return current
+
     if cmd == "list":
         for i, c in enumerate(service.list(), start=1):
             marker = "● " if c.pinned else "  "
@@ -332,9 +378,8 @@ def _handle_slash(service: ChatService, current: Chat, raw: str) -> Chat | None:
         if not rest:
             console.print("[red]usage:[/red] /switch <id|index>")
             return current
-        target = service.resolve(rest)
+        target = _resolve_in_repl(service, rest)
         if target is None:
-            console.print(f"[red]no chat matches[/red] {rest!r}")
             return current
         _print_history(target)
         return target
@@ -345,10 +390,12 @@ def _handle_slash(service: ChatService, current: Chat, raw: str) -> Chat | None:
         return new
 
     if cmd == "show":
-        target = service.resolve(rest) if rest else current
-        if target is None:
-            console.print(f"[red]no chat matches[/red] {rest!r}")
-            return current
+        if rest:
+            target = _resolve_in_repl(service, rest)
+            if target is None:
+                return current
+        else:
+            target = current
         _print_history(target)
         return current
 
@@ -374,10 +421,12 @@ def _handle_slash(service: ChatService, current: Chat, raw: str) -> Chat | None:
         return refreshed or current
 
     if cmd == "delete":
-        target = service.resolve(rest) if rest else current
-        if target is None:
-            console.print(f"[red]no chat matches[/red] {rest!r}")
-            return current
+        if rest:
+            target = _resolve_in_repl(service, rest)
+            if target is None:
+                return current
+        else:
+            target = current
         try:
             confirm = input(f"Delete {target.id} ({target.title!r})? [y/N] ").strip().lower()
         except (EOFError, KeyboardInterrupt):
